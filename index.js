@@ -1,37 +1,26 @@
 // index.js
 import 'dotenv/config';
 import {
-  Client,
-  GatewayIntentBits,
-  REST,
-  Routes,
-  Events,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
+  Client, GatewayIntentBits, REST, Routes, Events,
+  ActionRowBuilder, ButtonBuilder, ButtonStyle,
 } from 'discord.js';
 import {
-  joinVoiceChannel,
-  createAudioPlayer,
-  createAudioResource,
-  VoiceConnectionStatus,
-  entersState,
-  demuxProbe,
+  joinVoiceChannel, createAudioPlayer, createAudioResource,
+  VoiceConnectionStatus, entersState, demuxProbe,
 } from '@discordjs/voice';
 import { spawn } from 'node:child_process';
 import ffmpeg from 'ffmpeg-static';
 import { data as radioCmd, STATIONS } from './commands/radio.js';
 
 // ================== CONFIG ==================
-// Define aquí las URLs de cada emisora por su "key"
+// Mapea cada "key" a su URL real
 const STATION_URLS = {
-  megastar: 'https://megastar-cope.flumotion.com/chunks.m3u8',
-  // ejemplo para añadir otra:
-  // mi_radio: 'https://mi-servidor/stream.m3u8',
+  megastar: 'https://megastar-cope.flumotion.com/chunks.m3u8',  // HLS
+  vibes:    'https://gamingrelay.simulatorvibes.com/',          // MP3/Icecast (pon la URL correcta)
 };
 
 // IDs de botones
-const BTN_PLAY_PREFIX = 'radio_play:'; // ej: radio_play:megastar
+const BTN_PLAY_PREFIX = 'radio_play:'; // p.ej. radio_play:megastar
 const BTN_STOP = 'radio_stop';
 
 // ============================================
@@ -40,10 +29,7 @@ async function registerCommands() {
   const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
   const body = [radioCmd.toJSON()];
   if (process.env.GUILD_ID) {
-    await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-      { body }
-    );
+    await rest.put(Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID), { body });
     console.log('✅ Comandos registrados (GUILD)');
   } else {
     await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), { body });
@@ -63,21 +49,30 @@ const players = new Map();     // guildId -> AudioPlayer
 const connections = new Map(); // guildId -> VoiceConnection
 
 // ---------- Audio helpers ----------
-function ffmpegHlsToOggOpus(hlsUrl) {
+function ffmpegToOggOpus(inputUrl) {
+  // Soporta HLS, MP3/Icecast, AAC, etc. y reconecta.
   const args = [
+    // Opcional (algunas radios Icecast prefieren User-Agent):
+    '-user_agent', 'DiscordBot/1.0 (+https://discord.com)',
+    // Si quisieras metadatos ICY (título), pon '1'; para solo audio, deja '0' o elimina la flag.
+    '-icy', '0',
+
     '-re',
-    '-i', hlsUrl,
+    '-i', inputUrl,
     '-vn',
     '-analyzeduration', '0',
     '-loglevel', 'error',
     '-reconnect', '1',
     '-reconnect_streamed', '1',
     '-reconnect_delay_max', '5',
+
+    // audio -> Opus
     '-ac', '2',
     '-ar', '48000',
     '-c:a', 'libopus',
     '-b:a', '128k',
     '-application', 'lowdelay',
+
     '-f', 'ogg',
     'pipe:1',
   ];
@@ -85,20 +80,10 @@ function ffmpegHlsToOggOpus(hlsUrl) {
   return proc.stdout;
 }
 
-async function createOggOpusResource(hlsUrl) {
-  const stream = ffmpegHlsToOggOpus(hlsUrl);
+async function createOggOpusResource(url) {
+  const stream = ffmpegToOggOpus(url);
   const probed = await demuxProbe(stream);
   return createAudioResource(probed.stream, { inputType: probed.type });
-}
-
-async function ensurePlayer(guildId) {
-  let player = players.get(guildId);
-  if (!player) {
-    const { createAudioPlayer } = await import('@discordjs/voice');
-    player = createAudioPlayer();
-    players.set(guildId, player);
-  }
-  return player;
 }
 
 async function connectToVoice(channel) {
@@ -116,18 +101,32 @@ async function connectToVoice(channel) {
   return conn;
 }
 
+function ensurePlayer(guildId) {
+  let player = players.get(guildId);
+  if (!player) {
+    player = createAudioPlayer();
+    players.set(guildId, player);
+  }
+  return player;
+}
+
 // ---------- UI helpers ----------
 function makeControlsRow() {
-  // Botón principal de MegaStar + Stop
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId(BTN_PLAY_PREFIX + 'megastar')
-      .setLabel('⭐MegaStar')
-      .setStyle(ButtonStyle.Primary),
+  // Botones para TODAS las emisoras + Stop
+  const row = new ActionRowBuilder();
+  for (const s of STATIONS) {
+    row.addComponents(
+      new ButtonBuilder()
+        .setCustomId(BTN_PLAY_PREFIX + s.key)
+        .setLabel(s.label)
+        .setStyle(ButtonStyle.Primary)
+    );
+  }
+  row.addComponents(
     new ButtonBuilder()
       .setCustomId(BTN_STOP)
       .setLabel('🟥Stop')
-      .setStyle(ButtonStyle.Danger),
+      .setStyle(ButtonStyle.Danger)
   );
   return row;
 }
@@ -142,13 +141,9 @@ async function playStationInUserChannel(guild, userId, stationKey) {
   if (!voiceChannel) throw new Error('Debes estar en un canal de voz.');
 
   const connection = await connectToVoice(voiceChannel);
-  const { createAudioPlayer } = await import('@discordjs/voice');
-  let player = players.get(guild.id);
-  if (!player) {
-    player = createAudioPlayer();
-    players.set(guild.id, player);
-  }
+  const player = ensurePlayer(guild.id);
   connection.subscribe(player);
+
   const resource = await createOggOpusResource(url);
   player.play(resource);
 }
@@ -171,14 +166,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
   // Slash: /radio <estacion>
   if (interaction.isChatInputCommand() && interaction.commandName === 'radio') {
     const stationKey = interaction.options.getString('estacion');
-
+    await interaction.deferReply({ ephemeral: false }); // público
     try {
-      await interaction.deferReply({ ephemeral: false }); // público
       await playStationInUserChannel(interaction.guild, interaction.user.id, stationKey);
-
-      const stationLabel = STATIONS.find(s => s.key === stationKey)?.label || stationKey;
+      const label = STATIONS.find(s => s.key === stationKey)?.label || stationKey;
       await interaction.editReply({
-        content: `▶️ Reproduciendo **${stationLabel}**`,
+        content: `▶️ Reproduciendo **${label}**`,
         components: [makeControlsRow()],
       });
     } catch (e) {
@@ -187,19 +180,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  // Botones
+  // Botones (públicos)
   if (interaction.isButton()) {
-    // Público también (sin ephemeral)
     await interaction.deferReply({ ephemeral: false });
 
-    // Play de una estación
     if (interaction.customId.startsWith(BTN_PLAY_PREFIX)) {
       const stationKey = interaction.customId.split(':')[1];
       try {
         await playStationInUserChannel(interaction.guild, interaction.user.id, stationKey);
-        const stationLabel = STATIONS.find(s => s.key === stationKey)?.label || stationKey;
+        const label = STATIONS.find(s => s.key === stationKey)?.label || stationKey;
         await interaction.editReply({
-          content: `▶️ Reproduciendo **${stationLabel}**`,
+          content: `▶️ Reproduciendo **${label}**`,
           components: [makeControlsRow()],
         });
       } catch (e) {
@@ -208,7 +199,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // Stop
     if (interaction.customId === BTN_STOP) {
       await stopInGuild(interaction.guild);
       await interaction.editReply({ content: '⏹️ Radio detenida.', components: [makeControlsRow()] });

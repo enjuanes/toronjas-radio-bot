@@ -1,9 +1,10 @@
 // commands/radio.js
 import { SlashCommandBuilder } from 'discord.js';
 
+// Lista de emisoras visibles en el comando y que usaremos para los botones
 export const STATIONS = [
   { key: 'megastar', label: '⭐MegaStar' },
-  // añade aquí más estaciones: { key: 'mi_radio', label: '🎵Mi Radio' }
+  { key: 'vibes',    label: '🚜Simulator Vibes' }, // <- nueva emisora (MP3/Icecast)
 ];
 
 export const data = new SlashCommandBuilder()
@@ -13,7 +14,5 @@ export const data = new SlashCommandBuilder()
     o.setName('estacion')
       .setDescription('Emisora a reproducir')
       .setRequired(true)
-      .addChoices(
-        ...STATIONS.map(s => ({ name: s.label, value: s.key }))
-      )
+      .addChoices(...STATIONS.map(s => ({ name: s.label, value: s.key })))
   );
