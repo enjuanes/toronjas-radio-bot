@@ -10,11 +10,11 @@ import {
 } from '@discordjs/voice';
 import { spawn } from 'node:child_process';
 import ffmpeg from 'ffmpeg-static';
-import { data as radioCmd, STATIONS } from './commands/radio.js';
+import { data as radioCmd, RADIOS } from './commands/radio.js';
 
 // ================== CONFIG ==================
 // Mapea cada "key" a su URL real
-const STATION_URLS = {
+const RADIOS_URLS = {
   megastar: 'https://megastar-cope.flumotion.com/chunks.m3u8',  // HLS
   vibes:    'https://gamingrelay.simulatorvibes.com/',          // MP3/Icecast (pon la URL correcta)
 };
@@ -112,29 +112,31 @@ function ensurePlayer(guildId) {
 
 // ---------- UI helpers ----------
 function makeControlsRow() {
-  // Botones para TODAS las emisoras + Stop
+  // Botones para TODAS las radios + Stop
   const row = new ActionRowBuilder();
-  for (const s of STATIONS) {
+  for (const radio of RADIOS) {
     row.addComponents(
       new ButtonBuilder()
-        .setCustomId(BTN_PLAY_PREFIX + s.key)
-        .setLabel(s.label)
-        .setStyle(ButtonStyle.Primary)
+        .setCustomId(BTN_PLAY_PREFIX + radio.key)
+        .setLabel(radio.label)
+        .setStyle(radio.buttonStyle)
+        .setEmoji(radio.emoji)
     );
   }
   row.addComponents(
     new ButtonBuilder()
       .setCustomId(BTN_STOP)
-      .setLabel('🟥Stop')
-      .setStyle(ButtonStyle.Danger)
+      .setLabel('Stop')
+      .setStyle(ButtonStyle.Secondary)
+      .setEmoji('🟥')
   );
   return row;
 }
 
 // ---------- Core actions ----------
-async function playStationInUserChannel(guild, userId, stationKey) {
-  const url = STATION_URLS[stationKey];
-  if (!url) throw new Error('Estación no configurada: ' + stationKey);
+async function playRadioInUserChannel(guild, userId, radioKey) {
+  const url = RADIOS_URLS[radioKey];
+  if (!url) throw new Error('Radio no configurada: ' + radioKey);
 
   const member = await guild.members.fetch(userId);
   const voiceChannel = member.voice.channel;
@@ -165,11 +167,11 @@ client.once(Events.ClientReady, (c) => {
 client.on(Events.InteractionCreate, async (interaction) => {
   // Slash: /radio <estacion>
   if (interaction.isChatInputCommand() && interaction.commandName === 'radio') {
-    const stationKey = interaction.options.getString('estacion');
+    const radioKey = interaction.options.getString('radio');
     await interaction.deferReply({ ephemeral: false }); // público
     try {
-      await playStationInUserChannel(interaction.guild, interaction.user.id, stationKey);
-      const label = STATIONS.find(s => s.key === stationKey)?.label || stationKey;
+      await playRadioInUserChannel(interaction.guild, interaction.user.id, radioKey);
+      const label = RADIOS.find(s => s.key === radioKey)?.label || radioKey;
       await interaction.editReply({
         content: `▶️ Reproduciendo **${label}**`,
         components: [makeControlsRow()],
@@ -185,10 +187,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
     await interaction.deferReply({ ephemeral: false });
 
     if (interaction.customId.startsWith(BTN_PLAY_PREFIX)) {
-      const stationKey = interaction.customId.split(':')[1];
+      const radioKey = interaction.customId.split(':')[1];
       try {
-        await playStationInUserChannel(interaction.guild, interaction.user.id, stationKey);
-        const label = STATIONS.find(s => s.key === stationKey)?.label || stationKey;
+        await playRadioInUserChannel(interaction.guild, interaction.user.id, radioKey);
+        const label = RADIOS.find(s => s.key === radioKey)?.label || radioKey;
         await interaction.editReply({
           content: `▶️ Reproduciendo **${label}**`,
           components: [makeControlsRow()],
