@@ -165,7 +165,7 @@ client.once(Events.ClientReady, (c) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  // Slash: /radio <estacion>
+  // Slash: /radio <radio>
   if (interaction.isChatInputCommand() && interaction.commandName === 'radio') {
     const radioKey = interaction.options.getString('radio');
     await interaction.deferReply({ ephemeral: false }); // público
