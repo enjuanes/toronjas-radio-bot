@@ -41,13 +41,6 @@ export const RADIOS = [
     rowIndex: 1,
   },
   {
-    key: "cadena_100",
-    label: "Cadena 100",
-    buttonStyle: ButtonStyle.Primary,
-    emoji: "⛓️",
-    rowIndex: 1,
-  },
-  {
     key: "los40",
     label: "LOS40",
     buttonStyle: ButtonStyle.Danger,
@@ -59,6 +52,20 @@ export const RADIOS = [
     label: "LOS40 Urban",
     buttonStyle: ButtonStyle.Danger,
     emoji: "🐃",
+    rowIndex: 2,
+  },
+    {
+    key: "cadena_100",
+    label: "Cadena 100",
+    buttonStyle: ButtonStyle.Danger,
+    emoji: "⛓️",
+    rowIndex: 2,
+  },
+  {
+    key: "cadena_dial",
+    label: "Cadena Dial",
+    buttonStyle: ButtonStyle.Danger,
+    emoji: "⛓️‍💥",
     rowIndex: 2,
   },
   {

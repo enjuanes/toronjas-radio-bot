@@ -35,6 +35,7 @@ const RADIOS_URLS = {
   flaix:
     "https://us-b4-p-e-jn18-audio.cdn.mdstrm.com/live-audio-aw/65afe4a0357cec56667ac739",
   cadena_100: "https://cadena100-cope.flumotion.com/chunks.m3u8",
+  cadena_dial: "https://25453.live.streamtheworld.com/CADENADIALAAC_SC",
   fallout: "https://fallout.fm:8444/falloutfm1.ogg",
   fallout_diamon_city_radio: "https://fallout.fm:8444/falloutfm6.ogg",
   fallout_radio_new_vegas: "https://fallout.fm:8444/falloutfm3.ogg",
