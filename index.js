@@ -9,6 +9,7 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags
 } from "discord.js";
 import {
   joinVoiceChannel,
@@ -73,6 +74,9 @@ if (process.argv.includes("--register")) {
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates],
 });
+
+process.on("unhandledRejection", console.error);
+client.on("error", console.error);
 
 // por servidor
 const players = new Map(); // guildId -> AudioPlayer
@@ -157,32 +161,6 @@ function ensurePlayer(guildId) {
 // ---------- UI helpers ----------
 function makeControlsRow() {
   // Botones para TODAS las radios + Stop
-  const buttons = [
-    ...RADIOS.map((radio) =>
-      new ButtonBuilder()
-        .setCustomId(BTN_PLAY_PREFIX + radio.key)
-        .setLabel(radio.label)
-        .setStyle(radio.buttonStyle)
-        .setEmoji(radio.emoji)
-    ),
-    new ButtonBuilder()
-      .setCustomId(BTN_STOP)
-      .setLabel("Stop")
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji("🟥"),
-  ];
-
-  const rows = [];
-  for (let i = 0; i < buttons.length; i += 5) {
-    rows.push(new ActionRowBuilder().addComponents(...buttons.slice(i, i + 5)));
-  }
-
-  // 3) Máximo 5 filas por mensaje
-  return rows.slice(0, 5);
-}
-
-function makeControlsRowLegacy() {
-  // Botones para TODAS las radios + Stop
   const rows = [];
   const rowsNum = Math.max(...RADIOS.map((r) => r.rowIndex));
 
@@ -214,20 +192,6 @@ function makeControlsRowLegacy() {
   rows.push(endRow);
 
   return rows;
-}
-
-function makeControlsRowLegacy2() {
-  // Botones para TODAS las radios + Stop
-  const row = new ActionRowBuilder();
-
-  row.addComponents(
-    new ButtonBuilder()
-      .setCustomId("pedo")
-      .setLabel("pedo")
-      .setStyle(ButtonStyle.Secondary)
-      .setEmoji("🟥")
-  );
-  return row;
 }
 
 // ---------- Core actions ----------
@@ -267,7 +231,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   // Slash: /radio <radio>
   if (interaction.isChatInputCommand() && interaction.commandName === "radio") {
     const radioKey = interaction.options.getString("radio");
-    await interaction.deferReply({ ephemeral: false }); // público
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     try {
       await playRadioInUserChannel(
         interaction.guild,
@@ -277,12 +241,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const label = RADIOS.find((s) => s.key === radioKey)?.label || radioKey;
       await interaction.editReply({
         content: `▶️ Reproduciendo **${label}**`,
-        components: makeControlsRowLegacy(),
+        components: makeControlsRow(),
       });
     } catch (e) {
       await interaction.editReply({
         content: `❌ ${e.message}`,
-        components: makeControlsRowLegacy(),
+        components: makeControlsRow(),
       });
     }
     return;
@@ -290,7 +254,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   // Botones (públicos)
   if (interaction.isButton()) {
-    await interaction.deferReply({ ephemeral: false });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     if (interaction.customId.startsWith(BTN_PLAY_PREFIX)) {
       const radioKey = interaction.customId.split(":")[1];
@@ -303,12 +267,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const label = RADIOS.find((s) => s.key === radioKey)?.label || radioKey;
         await interaction.editReply({
           content: `▶️ Reproduciendo **${label}**`,
-          components: makeControlsRowLegacy(),
+          components: makeControlsRow(),
         });
       } catch (e) {
         await interaction.editReply({
           content: `❌ ${e.message}`,
-          components: makeControlsRowLegacy(),
+          components: makeControlsRow(),
         });
       }
       return;
@@ -318,7 +282,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await stopInGuild(interaction.guild);
       await interaction.editReply({
         content: "⏹️ Radio detenida.",
-        components: makeControlsRowLegacy(),
+        components: makeControlsRow(),
       });
       return;
     }
